@@ -5,6 +5,7 @@ No Streamlit, Ollama, or external-service imports — safe to test in isolation.
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -42,3 +43,21 @@ def resolve_mode(value: Any) -> str:
         return value.strip()
 
     return DEFAULT_MODE
+
+
+# ---------------------------------------------------------------------------
+# get_default_mode — env-aware startup default
+# ---------------------------------------------------------------------------
+
+def get_default_mode() -> str:
+    """Return the app's startup default mode, respecting ``APP_DEFAULT_MODE``.
+
+    When ``APP_DEFAULT_MODE`` is set to a valid mode string in the process
+    environment, that mode is returned.  Any unrecognised or blank value falls
+    back to :data:`DEFAULT_MODE` (the parallel-reader, preserving legacy
+    behaviour).
+    """
+    raw = os.getenv("APP_DEFAULT_MODE", "").strip()
+    if not raw:
+        return DEFAULT_MODE
+    return resolve_mode(raw)

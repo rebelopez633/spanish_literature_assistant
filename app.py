@@ -51,7 +51,8 @@ from infrastructure.translation_history import (
     build_session_restore_state,
 )
 from tts_component import render_tts_button
-from core.app_modes import APP_MODES, DEFAULT_MODE, PARALLEL_READER_MODE, READING_COACH_MODE
+from core.app_modes import APP_MODES, DEFAULT_MODE, PARALLEL_READER_MODE, READING_COACH_MODE, get_default_mode
+from reading_coach.config import get_coach_settings as _get_coach_settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -512,7 +513,11 @@ _session_defaults = {
     "_history_current_source_hash": "",
     "_history_loaded_notice": "",
     "_source_uploaded_filename": "",
-    "app_mode": DEFAULT_MODE,
+    "app_mode": get_default_mode(),
+    # Reading Coach UI defaults — sourced from env via reading_coach.config
+    "coach_reader_level": (_rc := _get_coach_settings()).default_level,
+    "coach_include_english_gloss": _rc.include_english_gloss,
+    "coach_include_modern_spanish": _rc.include_modern_spanish,
 }
 
 for _state_key, _state_value in _session_defaults.items():

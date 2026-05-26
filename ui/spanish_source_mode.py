@@ -16,6 +16,8 @@ import streamlit as st
 
 from infrastructure import ollama_client
 from reading_coach.analyzer import AnalysisResult, CoachAnalysisError, analyze_spanish_source
+from reading_coach.checker import CoachCheckerConfig
+from reading_coach.config import get_coach_settings
 from reading_coach.schemas import VALID_COACH_LEVELS
 
 # ---------------------------------------------------------------------------
@@ -202,6 +204,7 @@ def render_coach_mode(
         with st.spinner("Analysing passage…"):
             try:
                 client = make_ollama_client(ollama_host, ollama_model, timeout)
+                _settings = get_coach_settings()
                 analysis = analyze_spanish_source(
                     source_text.strip(),
                     reader_level=reader_level,
@@ -209,6 +212,10 @@ def render_coach_mode(
                     include_english_gloss=include_english_gloss,
                     include_modern_spanish=include_modern_spanish,
                     llm_client=client,
+                    checker_config=CoachCheckerConfig(
+                        include_english_gloss=include_english_gloss,
+                        max_annotations=_settings.max_annotations,
+                    ),
                 )
                 st.session_state.coach_analysis = analysis
             except CoachAnalysisError as exc:
