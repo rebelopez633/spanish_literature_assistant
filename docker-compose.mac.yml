@@ -1,12 +1,12 @@
 services:
   mongo:
     image: mongo:7.0
-    container_name: spanish-reader-mongo
+    container_name: sla-mongo
     restart: unless-stopped
     ports:
       - "${MONGO_HOST_PORT:-27017}:27017"
     volumes:
-      - mongo_data:/data/db
+      - sla_mongo_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 10s
@@ -16,7 +16,7 @@ services:
 
   app:
     build: .
-    container_name: spanish-parallel-reader
+    container_name: sla-app
     restart: unless-stopped
     depends_on:
       mongo:
@@ -67,4 +67,4 @@ services:
       TTS_RATE: ${TTS_RATE:-0.9}
 
 volumes:
-  mongo_data:
+  sla_mongo_data:

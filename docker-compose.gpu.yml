@@ -1,12 +1,12 @@
 services:
   mongo:
     image: mongo:7.0
-    container_name: spanish-reader-mongo
+    container_name: sla-mongo
     restart: unless-stopped
     ports:
       - "${MONGO_HOST_PORT:-27017}:27017"
     volumes:
-      - mongo_data:/data/db
+      - sla_mongo_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "mongodb://localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 10s
@@ -16,7 +16,7 @@ services:
 
   ollama:
     image: ollama/ollama:0.23.2
-    container_name: spanish-reader-ollama
+    container_name: sla-ollama
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -27,7 +27,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ollama_models:/root/.ollama
+      - sla_ollama_models:/root/.ollama
     environment:
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
@@ -42,7 +42,7 @@ services:
 
   ollama-pull:
     image: ollama/ollama:0.23.2
-    container_name: spanish-reader-ollama-pull
+    container_name: sla-ollama-pull
     depends_on:
       ollama:
         condition: service_healthy
@@ -59,7 +59,7 @@ services:
 
   app:
     build: .
-    container_name: spanish-parallel-reader
+    container_name: sla-app
     restart: unless-stopped
     depends_on:
       mongo:
@@ -115,5 +115,5 @@ services:
           memory: 256M
 
 volumes:
-  ollama_models:
-  mongo_data:
+  sla_ollama_models:
+  sla_mongo_data:
