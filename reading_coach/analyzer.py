@@ -13,23 +13,16 @@ No Streamlit, Ollama, or network imports here.
 """
 from __future__ import annotations
 
-import json
 import logging
-import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from pydantic import ValidationError
-
 from reading_coach.checker import CoachCheckResult, CoachCheckerConfig, check_coach_result
 from reading_coach.prompts import build_coach_prompt
+from reading_coach.response_parser import ReadingCoachParseError, parse_reading_coach_response
 from reading_coach.schemas import ReadingCoachResult
 
 logger = logging.getLogger(__name__)
-
-# Regex to strip Markdown code fences some models emit around JSON.
-_FENCE_START = re.compile(r"^```(?:json)?\s*", re.MULTILINE)
-_FENCE_END = re.compile(r"```\s*$", re.MULTILINE)
 
 
 # ---------------------------------------------------------------------------
@@ -60,51 +53,6 @@ class AnalysisResult:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-def _strip_fences(text: str) -> str:
-    """Remove Markdown code fences and surrounding whitespace."""
-    stripped = _FENCE_START.sub("", text.strip())
-    stripped = _FENCE_END.sub("", stripped.strip()).strip()
-    return stripped
-
-
-def _parse_result(raw: str) -> ReadingCoachResult:
-    """Attempt to parse *raw* into a ReadingCoachResult.
-
-    Strategy (mirrors translate_chunk in app.py):
-    1. Strip Markdown fences and whitespace.
-    2. Try model_validate_json on the cleaned content directly.
-    3. If that fails, search for the outermost {...} substring and retry.
-    4. On any remaining failure, raise CoachAnalysisError with a clear message.
-    """
-    content = _strip_fences(raw)
-
-    if not content:
-        raise CoachAnalysisError(
-            "LLM returned an empty response; cannot parse ReadingCoachResult."
-        )
-
-    # Attempt 1: direct parse.
-    try:
-        return ReadingCoachResult.model_validate_json(content)
-    except (ValidationError, ValueError, json.JSONDecodeError) as exc:
-        first_exc = exc
-
-    # Attempt 2: extract the outermost JSON object.
-    start = content.find("{")
-    end = content.rfind("}") + 1
-    if start >= 0 and end > start:
-        try:
-            return ReadingCoachResult.model_validate_json(content[start:end])
-        except (ValidationError, ValueError, json.JSONDecodeError) as inner:
-            raise CoachAnalysisError(
-                f"Failed to parse LLM response as ReadingCoachResult: {inner}"
-            ) from inner
-
-    raise CoachAnalysisError(
-        f"Failed to parse LLM response as ReadingCoachResult: {first_exc}"
-    ) from first_exc
-
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -170,7 +118,10 @@ def analyze_spanish_source(
         len(raw),
     )
 
-    coach_result = _parse_result(raw)
+    try:
+        coach_result = parse_reading_coach_response(raw)
+    except ReadingCoachParseError as exc:
+        raise CoachAnalysisError(str(exc)) from exc
 
     check = check_coach_result(source_text, coach_result, config=checker_config)
 
