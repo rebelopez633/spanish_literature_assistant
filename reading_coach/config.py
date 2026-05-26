@@ -9,6 +9,7 @@ Environment variables (all optional — built-in defaults used when unset or bla
     READING_COACH_MAX_ANNOTATIONS       Integer ≥ 0.                 Default: 7
     READING_COACH_INCLUDE_ENGLISH_GLOSS true/false.                  Default: true
     READING_COACH_INCLUDE_MODERN_SPANISH true/false.                  Default: true
+    READING_COACH_TIMEOUT_SECONDS       Float > 0.                   Default: 120.0
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ _DEFAULT_LEVEL: str = DEFAULT_COACH_LEVEL   # "B1"
 _DEFAULT_MAX_ANNOTATIONS: int = 7
 _DEFAULT_INCLUDE_ENGLISH_GLOSS: bool = True
 _DEFAULT_INCLUDE_MODERN_SPANISH: bool = True
+_DEFAULT_TIMEOUT_SECONDS: float = 120.0
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +53,9 @@ class CoachSettings:
 
     include_modern_spanish: bool
     """Whether the Modern Spanish paraphrase is requested by default."""
+
+    timeout_seconds: float
+    """LLM request timeout in seconds (``READING_COACH_TIMEOUT_SECONDS``)."""
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +89,22 @@ def _parse_int(key: str, default: int) -> int:
         return default
 
 
+def _parse_positive_float(key: str, default: float) -> float:
+    """Return a positive float from an env var; fall back to *default* on error.
+
+    Zero and negative values are treated as invalid (a non-positive timeout
+    has no sensible meaning) and also fall back to *default*.
+    """
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+        return value if value > 0 else default
+    except ValueError:
+        return default
+
+
 # ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
@@ -108,5 +129,8 @@ def get_coach_settings() -> CoachSettings:
         ),
         include_modern_spanish=_parse_bool(
             "READING_COACH_INCLUDE_MODERN_SPANISH", _DEFAULT_INCLUDE_MODERN_SPANISH
+        ),
+        timeout_seconds=_parse_positive_float(
+            "READING_COACH_TIMEOUT_SECONDS", _DEFAULT_TIMEOUT_SECONDS
         ),
     )

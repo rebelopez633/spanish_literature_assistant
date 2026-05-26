@@ -88,7 +88,7 @@ class TestMakeOllamaClientPayload:
         """Call the factory, invoke the client, capture the payload sent to chat."""
         if messages is None:
             messages = self._MESSAGES
-        with mock.patch("ui.spanish_source_mode.ollama_client.chat") as patched:
+        with mock.patch("reading_coach.llm_adapter.ollama_client.chat") as patched:
             patched.return_value = '{"original_spanish":"x","overall_level":"B1"}'
             client = make_ollama_client(host, model, timeout)
             client(messages)
@@ -138,7 +138,7 @@ class TestMakeOllamaClientPayload:
 
     def test_client_returns_chat_result(self):
         expected = '{"original_spanish":"test","overall_level":"B2"}'
-        with mock.patch("ui.spanish_source_mode.ollama_client.chat") as patched:
+        with mock.patch("reading_coach.llm_adapter.ollama_client.chat") as patched:
             patched.return_value = expected
             client = make_ollama_client("http://localhost:11434", "qwen2.5:7b", 30.0)
             result = client(self._MESSAGES)
@@ -147,7 +147,7 @@ class TestMakeOllamaClientPayload:
     def test_different_messages_produce_different_payloads(self):
         msgs_a = [{"role": "user", "content": "Text A"}]
         msgs_b = [{"role": "user", "content": "Text B"}]
-        with mock.patch("ui.spanish_source_mode.ollama_client.chat") as patched:
+        with mock.patch("reading_coach.llm_adapter.ollama_client.chat") as patched:
             patched.return_value = "{}"
             client = make_ollama_client("http://localhost:11434", "qwen2.5:7b", 30.0)
             client(msgs_a)

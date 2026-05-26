@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import streamlit as st
 
-from infrastructure import ollama_client
 from reading_coach.analyzer import AnalysisResult, CoachAnalysisError, analyze_spanish_source
 from reading_coach.checker import CoachCheckerConfig
 from reading_coach.config import get_coach_settings
+from reading_coach.errors import ReadingCoachTimeoutError
+from reading_coach.llm_adapter import make_ollama_coach_client
 from reading_coach.schemas import VALID_COACH_LEVELS
 
 # ---------------------------------------------------------------------------
@@ -38,10 +39,14 @@ _DENSITY_HELP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 def make_ollama_client(host: str, model: str, timeout: float):
-    """Return a ``(messages) -> str`` callable that calls Ollama /api/chat.
+    """Return a ``(messages) -> str`` callable backed by the typed coach adapter.
 
-    Non-streaming; format set to "json" so Ollama constrains token sampling
-    to valid JSON (where supported by the model).
+    Delegates to :func:`reading_coach.llm_adapter.make_ollama_coach_client` so
+    that network errors are mapped to typed :class:`ReadingCoachError` subclasses
+    instead of leaking raw ``requests`` exceptions into the Streamlit layer:
+
+    - ``requests.exceptions.Timeout``          → :class:`ReadingCoachTimeoutError`
+    - ``requests.exceptions.RequestException`` → :class:`ReadingCoachLLMError`
 
     Parameters
     ----------
@@ -50,18 +55,10 @@ def make_ollama_client(host: str, model: str, timeout: float):
     model:
         Model tag, e.g. ``"qwen2.5:7b"``.
     timeout:
-        Request timeout in seconds forwarded to ``ollama_client.chat``.
+        Request timeout in seconds.  Use ``get_coach_settings().timeout_seconds``
+        to source this from the ``READING_COACH_TIMEOUT_SECONDS`` env var.
     """
-    def _client(messages: list[dict[str, str]]) -> str:
-        payload: dict = {
-            "model": model,
-            "messages": messages,
-            "stream": False,
-            "format": "json",
-        }
-        return ollama_client.chat(host, payload, timeout)
-
-    return _client
+    return make_ollama_coach_client(host, model, timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +215,9 @@ def render_coach_mode(
                     ),
                 )
                 st.session_state.coach_analysis = analysis
+            except ReadingCoachTimeoutError as exc:
+                st.error(exc.user_message)
+                st.session_state.pop("coach_analysis", None)
             except CoachAnalysisError as exc:
                 st.error(f"Could not parse model response: {exc}")
                 st.session_state.pop("coach_analysis", None)
