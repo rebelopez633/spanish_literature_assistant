@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from reading_coach.checker import CoachCheckResult, CoachCheckerConfig, check_coach_result
+from reading_coach.errors import ReadingCoachError
 from reading_coach.prompts import build_coach_prompt
 from reading_coach.response_parser import ReadingCoachParseError, parse_reading_coach_response
 from reading_coach.schemas import ReadingCoachResult
@@ -29,11 +30,13 @@ logger = logging.getLogger(__name__)
 # Public exception
 # ---------------------------------------------------------------------------
 
-class CoachAnalysisError(Exception):
+class CoachAnalysisError(ReadingCoachError):
     """Raised when the LLM response cannot be parsed into a ReadingCoachResult.
 
-    The message always describes what went wrong so callers can surface it to
-    the user without inspecting the cause chain.
+    Subclasses :class:`ReadingCoachError` so the Streamlit UI can catch either
+    this specific type or the broader ``ReadingCoachError`` base.  The message
+    always describes what went wrong so callers can surface it to the user
+    without inspecting the cause chain.
     """
 
 

@@ -11,7 +11,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+import requests
+
 from infrastructure import ollama_client
+from reading_coach.errors import ReadingCoachLLMError, ReadingCoachTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +23,12 @@ logger = logging.getLogger(__name__)
 # Public exception
 # ---------------------------------------------------------------------------
 
-class OllamaResponseError(ValueError):
+class OllamaResponseError(ReadingCoachLLMError, ValueError):
     """Raised when the raw Ollama response has an unrecognised shape.
 
-    Subclasses ``ValueError`` so callers that catch the broader type still
-    work, while specific handling can target this class directly.
+    Subclasses :class:`ReadingCoachLLMError` (part of the typed coach error
+    hierarchy) and :class:`ValueError` (backward compat for Slice 1 callers
+    that catch the broader type).
     """
 
 
@@ -110,7 +114,17 @@ def make_ollama_coach_client(
         if options:
             payload["options"] = options
 
-        response = raw(host, payload, timeout)
+        try:
+            response = raw(host, payload, timeout)
+        except requests.exceptions.Timeout as exc:
+            raise ReadingCoachTimeoutError(
+                f"LLM request timed out after {timeout}s. "
+                "Try a shorter passage or increase the timeout."
+            ) from exc
+        except requests.exceptions.RequestException as exc:
+            raise ReadingCoachLLMError(
+                f"LLM request failed: {exc}"
+            ) from exc
         return _normalize_response(response)
 
     return _client

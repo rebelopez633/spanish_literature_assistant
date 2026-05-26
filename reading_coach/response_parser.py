@@ -20,6 +20,7 @@ import re
 
 from pydantic import ValidationError
 
+from reading_coach.errors import ReadingCoachParseError, ReadingCoachValidationError
 from reading_coach.schemas import ReadingCoachResult
 
 logger = logging.getLogger(__name__)
@@ -30,11 +31,9 @@ _FENCE_END = re.compile(r"```\s*$", re.MULTILINE)
 
 
 # ---------------------------------------------------------------------------
-# Public exception
+# ReadingCoachParseError is defined in reading_coach.errors and imported above.
+# It remains importable from this module for backward compatibility.
 # ---------------------------------------------------------------------------
-
-class ReadingCoachParseError(Exception):
-    """Raised when a raw LLM response cannot be parsed into ReadingCoachResult."""
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +52,7 @@ def _validate_dict(obj: dict) -> ReadingCoachResult:
     try:
         return ReadingCoachResult.model_validate(obj)
     except ValidationError as exc:
-        raise ReadingCoachParseError(
+        raise ReadingCoachValidationError(
             f"Failed to parse LLM response as ReadingCoachResult: {exc}"
         ) from exc
 
