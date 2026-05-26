@@ -19,7 +19,7 @@ from typing import Callable, Optional
 
 from reading_coach.checker import CoachCheckResult, CoachCheckerConfig, check_coach_result
 from reading_coach.errors import ReadingCoachError
-from reading_coach.prompts import build_coach_prompt
+from reading_coach.prompts import SPANISH_SOURCE_PROMPT_VERSION, build_coach_prompt
 from reading_coach.response_parser import ReadingCoachParseError, parse_reading_coach_response
 from reading_coach.retry import RetryConfig, get_retry_config, with_retry
 from reading_coach.schemas import ReadingCoachResult
@@ -52,6 +52,10 @@ class AnalysisResult:
     result: ReadingCoachResult
     check: CoachCheckResult
     raw_response: str  # verbatim string returned by llm_client
+    prompt_version: str = SPANISH_SOURCE_PROMPT_VERSION
+    """Version of the prompt that produced this result.  Populated automatically
+    from :data:`reading_coach.prompts.SPANISH_SOURCE_PROMPT_VERSION` so results
+    are traceable when the prompt evolves."""
 
 
 # ---------------------------------------------------------------------------

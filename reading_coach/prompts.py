@@ -4,8 +4,21 @@ Pure prompt builder for the Spanish Source Reading Coach.
 build_coach_prompt() constructs the Ollama chat messages list used to ask a
 local LLM to annotate a passage of original Spanish for English-speaking
 learners.  It performs no I/O and makes no Ollama calls.
+
+To evolve the prompt, bump SPANISH_SOURCE_PROMPT_VERSION and update the
+regression invariant tests in tests/test_prompt_version.py so the change is
+explicit and reviewable.
 """
 from __future__ import annotations
+
+# ---------------------------------------------------------------------------
+# Prompt version
+# Bump this string whenever the prompt instructions change in a way that
+# affects model behaviour.  The new value propagates automatically to every
+# AnalysisResult so results are traceable to the prompt that produced them.
+# ---------------------------------------------------------------------------
+
+SPANISH_SOURCE_PROMPT_VERSION: str = "spanish_source_v1"
 
 # ---------------------------------------------------------------------------
 # Annotation-density descriptions injected into the user prompt
