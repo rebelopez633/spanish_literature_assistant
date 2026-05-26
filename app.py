@@ -2350,7 +2350,6 @@ if st.session_state.get("app_mode", DEFAULT_MODE) == READING_COACH_MODE:
     render_coach_mode(
         ollama_host=OLLAMA_HOST,
         ollama_model=OLLAMA_MODEL,
-        timeout=float(OLLAMA_REQUEST_TIMEOUT),
     )
     st.stop()
 

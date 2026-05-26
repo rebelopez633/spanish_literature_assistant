@@ -142,13 +142,16 @@ def render_coach_mode(
     *,
     ollama_host: str,
     ollama_model: str,
-    timeout: float,
 ) -> None:
     """Render the complete Spanish Source Reading Coach UI panel.
 
     Called from app.py immediately before ``st.stop()`` when the user has
     selected the Reading Coach app mode.  All Streamlit output rendered here
     replaces the parallel-reader main content area.
+
+    The LLM timeout and checker policy are read from :func:`get_coach_settings`
+    so they can be controlled via environment variables without touching this
+    function's call site.
     """
     st.subheader("Spanish Source Reading Coach")
     st.caption("Paste a Spanish passage and let the coach annotate it for your level.")
@@ -200,8 +203,8 @@ def render_coach_mode(
     if analyse_clicked and (source_text or "").strip():
         with st.spinner("Analyzing passage…"):
             try:
-                client = make_ollama_client(ollama_host, ollama_model, timeout)
                 _settings = get_coach_settings()
+                client = make_ollama_client(ollama_host, ollama_model, _settings.timeout_seconds)
                 analysis = analyze_spanish_source(
                     source_text.strip(),
                     reader_level=reader_level,
@@ -212,6 +215,7 @@ def render_coach_mode(
                     checker_config=CoachCheckerConfig(
                         include_english_gloss=include_english_gloss,
                         max_annotations=_settings.max_annotations,
+                        annotation_limit_policy=_settings.annotation_limit_policy,
                     ),
                 )
                 st.session_state.coach_analysis = analysis
