@@ -69,7 +69,7 @@ class TestPromptVersionConstant:
         Bumping the version is intentional: change the expected value below AND
         update reading_coach/prompts.py AND adjust any invariants that changed.
         """
-        assert SPANISH_SOURCE_PROMPT_VERSION == "spanish_source_v1"
+        assert SPANISH_SOURCE_PROMPT_VERSION == "spanish_source_v2"
 
     def test_constant_naming_convention(self):
         """Version identifiers follow the 'spanish_source_' prefix convention."""
@@ -316,6 +316,23 @@ class TestPromptInvariantModernSpanishInstruction:
     def test_disabled_omits_positive_paraphrase_instruction(self):
         msgs_off = build_coach_prompt("Texto.", include_modern_spanish=False)
         assert "provide a clear modern spanish paraphrase" not in _user(msgs_off).lower()
+
+    def test_enabled_requests_per_phrase_equivalent(self):
+        """When modern Spanish is on, the prompt must ask for per-phrase equivalents."""
+        msgs = build_coach_prompt("Texto.", include_modern_spanish=True)
+        user_lower = _user(msgs).lower()
+        assert "modern_spanish_equivalent" in user_lower
+        assert "set to null" not in user_lower.split("modern_spanish_equivalent")[1].split("\n")[0]
+
+    def test_disabled_suppresses_per_phrase_equivalent(self):
+        """When modern Spanish is off, per-phrase equivalents must be suppressed (null)."""
+        msgs = build_coach_prompt("Texto.", include_modern_spanish=False)
+        user_lower = _user(msgs).lower()
+        assert "modern_spanish_equivalent" in user_lower
+        # The rule appears before the schema example — use find() to hit the rule line.
+        idx = user_lower.find("modern_spanish_equivalent")
+        surrounding = user_lower[idx:idx + 120]
+        assert "null" in surrounding
 
 
 # ===========================================================================

@@ -18,7 +18,7 @@ from __future__ import annotations
 # AnalysisResult so results are traceable to the prompt that produced them.
 # ---------------------------------------------------------------------------
 
-SPANISH_SOURCE_PROMPT_VERSION: str = "spanish_source_v1"
+SPANISH_SOURCE_PROMPT_VERSION: str = "spanish_source_v2"
 
 # ---------------------------------------------------------------------------
 # Annotation-density descriptions injected into the user prompt
@@ -136,6 +136,18 @@ def build_coach_prompt(
             "- modern_spanish: Set to null. Do not provide a modern Spanish paraphrase."
         )
 
+    if include_modern_spanish:
+        modern_spanish_equivalent_rule = (
+            "- modern_spanish_equivalent (within each difficult_phrase): Where a modern "
+            "Spanish replacement exists, populate this field with a concise contemporary "
+            "equivalent word or phrase."
+        )
+    else:
+        modern_spanish_equivalent_rule = (
+            "- modern_spanish_equivalent (within each difficult_phrase): Set to null for "
+            "all phrases. Do not provide modern Spanish equivalents for individual phrases."
+        )
+
     if include_english_gloss:
         english_gloss_rule = (
             "- english_gloss: Provide a flowing English translation of the entire "
@@ -175,6 +187,7 @@ Rules:
 - grammar_notes: Include notes on non-obvious grammar patterns in the passage.
 - comprehension_question: Provide one question that checks understanding of the passage.
 {modern_spanish_rule}
+{modern_spanish_equivalent_rule}
 {english_gloss_rule}
 - Use only CEFR values for all level fields: A1, A2, B1, B2, C1, C2.
 - Output ONLY a single valid JSON object that follows this schema exactly.
