@@ -193,15 +193,15 @@ def render_coach_mode(
         )
 
     analyse_clicked: bool = st.button(
-        "Analyse",
+        "Analyze",
         type="primary",
         disabled=not (source_text or "").strip(),
-        key="coach_analyse_btn",
+        key="coach_analyze_btn",
     )
 
     # --- Analysis on button click -----------------------------------------
     if analyse_clicked and (source_text or "").strip():
-        with st.spinner("Analysing passage…"):
+        with st.spinner("Analyzing passage…"):
             try:
                 client = make_ollama_client(ollama_host, ollama_model, timeout)
                 _settings = get_coach_settings()

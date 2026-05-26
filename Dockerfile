@@ -19,7 +19,10 @@ COPY app.py .
 COPY checker.py .
 COPY text_processing.py .
 COPY tts_component.py .
+COPY core ./core
 COPY infrastructure ./infrastructure
+COPY reading_coach ./reading_coach
+COPY ui ./ui
 COPY .streamlit .streamlit
 
 EXPOSE 8501
