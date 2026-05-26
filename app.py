@@ -51,6 +51,7 @@ from infrastructure.translation_history import (
     build_session_restore_state,
 )
 from tts_component import render_tts_button
+from core.app_modes import APP_MODES, DEFAULT_MODE, PARALLEL_READER_MODE, READING_COACH_MODE
 
 logging.basicConfig(
     level=logging.INFO,
@@ -416,8 +417,15 @@ st.markdown(
 )
 
 
-st.title("📚 Spanish Parallel Reader")
-st.caption("Local-first Spanish study with Streamlit + Ollama")
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = DEFAULT_MODE
+
+if st.session_state.app_mode == READING_COACH_MODE:
+    st.title("📖 Spanish Source Reading Coach")
+    st.caption("Analyse original Spanish texts — local-first with Ollama")
+else:
+    st.title("📚 Spanish Parallel Reader")
+    st.caption("Local-first Spanish study with Streamlit + Ollama")
 
 
 # -----------------------------
@@ -504,6 +512,7 @@ _session_defaults = {
     "_history_current_source_hash": "",
     "_history_loaded_notice": "",
     "_source_uploaded_filename": "",
+    "app_mode": DEFAULT_MODE,
 }
 
 for _state_key, _state_value in _session_defaults.items():
@@ -2024,6 +2033,12 @@ def render_result_card(
 # -----------------------------
 
 with st.sidebar:
+    st.radio(
+        "App mode",
+        APP_MODES,
+        key="app_mode",
+    )
+    st.divider()
     st.header("Settings")
 
     settings_mode = st.radio(
@@ -2319,6 +2334,20 @@ checker_settings = get_checker_settings(
     llm_enabled_override=checker_llm_ui,
     detailed_diagnostics_override=checker_detailed_ui,
 )
+
+
+# -----------------------------
+# Mode routing
+# -----------------------------
+
+if st.session_state.get("app_mode", DEFAULT_MODE) == READING_COACH_MODE:
+    from ui.spanish_source_mode import render_coach_mode
+    render_coach_mode(
+        ollama_host=OLLAMA_HOST,
+        ollama_model=OLLAMA_MODEL,
+        timeout=float(OLLAMA_REQUEST_TIMEOUT),
+    )
+    st.stop()
 
 
 # -----------------------------
