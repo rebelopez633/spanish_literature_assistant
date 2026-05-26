@@ -4,6 +4,10 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 from checker import PairCheckResult
 from infrastructure.translation_history import (
     MongoHistoryConfig,

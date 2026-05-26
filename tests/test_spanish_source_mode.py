@@ -13,6 +13,8 @@ import unittest.mock as mock
 
 import pytest
 
+pytestmark = pytest.mark.ui
+
 from ui.spanish_source_mode import DENSITY_LABELS, make_ollama_client
 from reading_coach.schemas import VALID_COACH_LEVELS
 

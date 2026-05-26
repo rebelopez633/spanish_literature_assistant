@@ -15,6 +15,8 @@ import unittest.mock as mock
 
 import pytest
 
+pytestmark = pytest.mark.ui
+
 from reading_coach.analyzer import AnalysisResult, CoachAnalysisError
 from reading_coach.checker import CoachCheckResult, STATUS_PASSED, STATUS_WARNING
 from reading_coach.errors import ReadingCoachLLMError, ReadingCoachTimeoutError
