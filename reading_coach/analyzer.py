@@ -21,6 +21,7 @@ from reading_coach.checker import CoachCheckResult, CoachCheckerConfig, check_co
 from reading_coach.errors import ReadingCoachError
 from reading_coach.prompts import build_coach_prompt
 from reading_coach.response_parser import ReadingCoachParseError, parse_reading_coach_response
+from reading_coach.retry import RetryConfig, get_retry_config, with_retry
 from reading_coach.schemas import ReadingCoachResult
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ def analyze_spanish_source(
     include_modern_spanish: bool = True,
     llm_client: Callable[[list[dict[str, str]]], str],
     checker_config: Optional[CoachCheckerConfig] = None,
+    retry_config: RetryConfig | None = None,
 ) -> AnalysisResult:
     """Orchestrate one full reading-coach analysis pass.
 
@@ -112,7 +114,18 @@ def analyze_spanish_source(
         include_modern_spanish=include_modern_spanish,
     )
 
-    raw = llm_client(messages)
+    _config = retry_config if retry_config is not None else get_retry_config()
+
+    def _attempt() -> tuple[str, ReadingCoachResult]:
+        _raw = llm_client(messages)
+        _result = parse_reading_coach_response(_raw)
+        return _raw, _result
+
+    try:
+        raw, coach_result = with_retry(_attempt, config=_config)
+    except ReadingCoachParseError as exc:
+        raise CoachAnalysisError(str(exc)) from exc
+    # ReadingCoachLLMError (after retries exhausted) propagates uncaught.
 
     logger.debug(
         "analyze_spanish_source: reader_level=%s density=%s raw_len=%d",
@@ -120,11 +133,6 @@ def analyze_spanish_source(
         annotation_density,
         len(raw),
     )
-
-    try:
-        coach_result = parse_reading_coach_response(raw)
-    except ReadingCoachParseError as exc:
-        raise CoachAnalysisError(str(exc)) from exc
 
     check = check_coach_result(source_text, coach_result, config=checker_config)
 
