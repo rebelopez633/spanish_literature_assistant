@@ -27,6 +27,22 @@ STATUS_FAILED: str = "failed"
 _SEVERITY_RANK: dict[str, int] = {STATUS_PASSED: 0, STATUS_WARNING: 1, STATUS_FAILED: 2}
 _BEGINNER_LEVELS: frozenset[str] = frozenset({"A1", "A2"})
 
+# ---------------------------------------------------------------------------
+# Annotation limit policy constants
+# ---------------------------------------------------------------------------
+
+POLICY_WARN: str = "warn"
+"""Keep all annotations and record a warning issue."""
+
+POLICY_TRUNCATE: str = "truncate"
+"""Keep only the first *max_annotations* phrases and record a warning issue."""
+
+POLICY_FAIL: str = "fail"
+"""Record a *failed* issue when the annotation count exceeds the limit."""
+
+_VALID_ANNOTATION_POLICIES: frozenset[str] = frozenset({POLICY_WARN, POLICY_TRUNCATE, POLICY_FAIL})
+_DEFAULT_ANNOTATION_POLICY: str = POLICY_WARN
+
 
 # ---------------------------------------------------------------------------
 # Result model
@@ -54,6 +70,63 @@ class CoachCheckerConfig:
     include_english_gloss: bool = False
     max_annotations: int = 20
     trivial_length_threshold: int = 100
+    annotation_limit_policy: str = POLICY_WARN
+    """Policy controlling what happens when *difficult_phrases* exceeds
+    *max_annotations*.  One of ``POLICY_WARN``, ``POLICY_TRUNCATE``, or
+    ``POLICY_FAIL``.  Invalid values fall back to ``POLICY_WARN``."""
+
+
+# ---------------------------------------------------------------------------
+# Public policy function
+# ---------------------------------------------------------------------------
+
+def apply_annotation_limit(
+    result: ReadingCoachResult,
+    max_annotations: int,
+    policy: str,
+) -> tuple[ReadingCoachResult, tuple[str, str] | None]:
+    """Apply the annotation limit policy to a :class:`ReadingCoachResult`.
+
+    Returns a 2-tuple ``(result, issue_or_none)`` where *issue_or_none* is
+    ``(severity, message)`` or ``None``.
+
+    - **warn**     — return original result unchanged with a warning issue.
+    - **truncate** — return a *new* result with ``difficult_phrases`` capped at
+      *max_annotations*, plus a warning issue.  The original is never mutated.
+    - **fail**     — return original result unchanged with a *failed* issue.
+    - Invalid policy — fall back to ``"warn"``.
+
+    When *count ≤ max_annotations* no issue is produced for any policy.
+    """
+    effective = policy if policy in _VALID_ANNOTATION_POLICIES else _DEFAULT_ANNOTATION_POLICY
+    count = len(result.difficult_phrases)
+
+    if count <= max_annotations:
+        return result, None
+
+    if effective == POLICY_TRUNCATE:
+        truncated = result.model_copy(
+            update={"difficult_phrases": list(result.difficult_phrases[:max_annotations])}
+        )
+        msg = (
+            f"Annotation count {count} exceeds max_annotations limit of {max_annotations}. "
+            f"Truncated to {max_annotations} phrases."
+        )
+        return truncated, (STATUS_WARNING, msg)
+
+    if effective == POLICY_FAIL:
+        msg = (
+            f"Annotation count {count} exceeds max_annotations limit of {max_annotations}. "
+            "Check failed."
+        )
+        return result, (STATUS_FAILED, msg)
+
+    # POLICY_WARN (and fallback)
+    msg = (
+        f"Annotation count {count} exceeds max_annotations limit of {max_annotations}. "
+        "Consider reducing the number of flagged phrases."
+    )
+    return result, (STATUS_WARNING, msg)
 
 
 # ---------------------------------------------------------------------------
@@ -147,14 +220,11 @@ def _check_annotation_count(
     config: CoachCheckerConfig,
     acc: _Accumulator,
 ) -> None:
-    """Check 5: annotation count must not exceed max_annotations."""
-    count = len(result.difficult_phrases)
-    if count > config.max_annotations:
-        acc.add(
-            STATUS_WARNING,
-            f"Annotation count {count} exceeds max_annotations limit of {config.max_annotations}. "
-            "Consider reducing the number of flagged phrases.",
-        )
+    """Check 5: annotation count policy applied via apply_annotation_limit."""
+    _, issue = apply_annotation_limit(result, config.max_annotations, config.annotation_limit_policy)
+    if issue is not None:
+        severity, message = issue
+        acc.add(severity, message)
 
 
 def _check_beginner_empty_annotations(

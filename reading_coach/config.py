@@ -10,6 +10,7 @@ Environment variables (all optional — built-in defaults used when unset or bla
     READING_COACH_INCLUDE_ENGLISH_GLOSS true/false.                  Default: true
     READING_COACH_INCLUDE_MODERN_SPANISH true/false.                  Default: true
     READING_COACH_TIMEOUT_SECONDS       Float > 0.                   Default: 120.0
+    READING_COACH_ANNOTATION_LIMIT_POLICY warn|truncate|fail.        Default: warn
 """
 from __future__ import annotations
 
@@ -27,6 +28,8 @@ _DEFAULT_MAX_ANNOTATIONS: int = 7
 _DEFAULT_INCLUDE_ENGLISH_GLOSS: bool = True
 _DEFAULT_INCLUDE_MODERN_SPANISH: bool = True
 _DEFAULT_TIMEOUT_SECONDS: float = 120.0
+_DEFAULT_ANNOTATION_LIMIT_POLICY: str = "warn"
+_VALID_ANNOTATION_POLICIES: frozenset[str] = frozenset({"warn", "truncate", "fail"})
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +59,10 @@ class CoachSettings:
 
     timeout_seconds: float
     """LLM request timeout in seconds (``READING_COACH_TIMEOUT_SECONDS``)."""
+
+    annotation_limit_policy: str
+    """Annotation limit enforcement policy (``READING_COACH_ANNOTATION_LIMIT_POLICY``).
+    One of ``"warn"``, ``"truncate"``, or ``"fail"``."""
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +112,19 @@ def _parse_positive_float(key: str, default: float) -> float:
         return default
 
 
+def _parse_annotation_policy(key: str, default: str) -> str:
+    """Return a valid annotation limit policy string from an env var.
+
+    Accepts only exact lowercase matches of ``"warn"``, ``"truncate"``, or
+    ``"fail"``; anything else (including uppercase variants) falls back to
+    *default*.
+    """
+    raw = os.getenv(key, "").strip()
+    if raw in _VALID_ANNOTATION_POLICIES:
+        return raw
+    return default
+
+
 # ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
@@ -132,5 +152,8 @@ def get_coach_settings() -> CoachSettings:
         ),
         timeout_seconds=_parse_positive_float(
             "READING_COACH_TIMEOUT_SECONDS", _DEFAULT_TIMEOUT_SECONDS
+        ),
+        annotation_limit_policy=_parse_annotation_policy(
+            "READING_COACH_ANNOTATION_LIMIT_POLICY", _DEFAULT_ANNOTATION_LIMIT_POLICY
         ),
     )
