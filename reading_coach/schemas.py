@@ -7,9 +7,9 @@ schemas in app.py. Safe to import and test without any external services.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -112,3 +112,84 @@ class ReadingCoachResult(BaseModel):
     @classmethod
     def coerce_overall_level(cls, v: object) -> str:
         return _coerce_level(v, "overall_level")
+
+
+# ---------------------------------------------------------------------------
+# ChunkAnalysisResult
+# ---------------------------------------------------------------------------
+
+class ChunkAnalysisResult(BaseModel):
+    """Per-chunk result bundled from one :func:`analyze_spanish_source` call.
+
+    ``analysis`` holds the :class:`~reading_coach.analyzer.AnalysisResult`
+    dataclass when the chunk succeeded, or ``None`` when it failed.  The
+    ``error`` field carries the exception message on failure.
+
+    ``analysis`` is typed as ``Optional[Any]`` to avoid a circular import
+    (``analyzer.py`` imports from this module).  Callers that need the typed
+    result can narrow with ``isinstance(chunk.analysis, AnalysisResult)``.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    chunk_index: int
+    """Zero-based position of this chunk in the full passage."""
+
+    total_chunks: int
+    """Total number of chunks the passage was split into."""
+
+    chunk_text: str
+    """The original Spanish text for this chunk."""
+
+    analysis: Optional[Any] = None
+    """Populated on success; ``None`` on failure."""
+
+    error: Optional[str] = None
+    """Exception message when analysis failed; ``None`` on success."""
+
+    @property
+    def succeeded(self) -> bool:
+        """``True`` when :attr:`analysis` is populated (chunk analysed successfully)."""
+        return self.analysis is not None
+
+
+# ---------------------------------------------------------------------------
+# MultiChunkAnalysisResult
+# ---------------------------------------------------------------------------
+
+class MultiChunkAnalysisResult(BaseModel):
+    """Aggregate result for a full (potentially multi-chunk) analysis pass.
+
+    Returned by :func:`reading_coach.multi_chunk_analyzer.analyze_spanish_source_chunks`.
+    Holds the original Spanish verbatim, per-chunk results, and aggregate
+    counts so callers need not iterate :attr:`chunks` for common queries.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    original_spanish: str
+    """The verbatim source text passed to the analysis function."""
+
+    chunks: List[ChunkAnalysisResult]
+    """Per-chunk results in chunk-index order."""
+
+    prompt_version: str
+    """The prompt version that produced these results (traceable to source)."""
+
+    total_chunks: int
+    """Number of chunks the passage was split into."""
+
+    successful_chunks: int
+    """Number of chunks that were analysed without error."""
+
+    failed_chunks: int
+    """Number of chunks that could not be analysed (LLM or parse error)."""
+
+    @property
+    def all_difficult_phrases(self) -> List[DifficultPhrase]:
+        """Combined list of difficult phrases from all successful chunks, in order."""
+        phrases: List[DifficultPhrase] = []
+        for chunk in self.chunks:
+            if chunk.analysis is not None:
+                phrases.extend(chunk.analysis.result.difficult_phrases)
+        return phrases
