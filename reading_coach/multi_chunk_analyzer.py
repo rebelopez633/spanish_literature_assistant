@@ -52,6 +52,7 @@ def analyze_spanish_source_chunks(
     llm_client: Callable[[list[dict[str, str]]], str],
     checker_config: Optional[CoachCheckerConfig] = None,
     retry_config: RetryConfig | None = None,
+    continue_on_error: bool = True,
 ) -> MultiChunkAnalysisResult:
     """Analyse a (potentially long) Spanish passage by splitting into chunks.
 
@@ -85,6 +86,7 @@ def analyze_spanish_source_chunks(
     chunk_results: list[ChunkAnalysisResult] = []
 
     for i, chunk_text in enumerate(chunks_text):
+        chunk_id = f"chunk_{i:04d}"
         try:
             ar = analyze_spanish_source(
                 chunk_text,
@@ -98,13 +100,18 @@ def analyze_spanish_source_chunks(
             )
             chunk_results.append(
                 ChunkAnalysisResult(
+                    chunk_id=chunk_id,
                     chunk_index=i,
                     total_chunks=total,
                     chunk_text=chunk_text,
                     analysis=ar,
+                    checker_result=ar.check,
+                    status=ar.check.status,
                 )
             )
         except Exception as exc:  # noqa: BLE001
+            if not continue_on_error:
+                raise
             logger.warning(
                 "Chunk %d/%d failed (%s: %s)",
                 i + 1,
@@ -114,16 +121,19 @@ def analyze_spanish_source_chunks(
             )
             chunk_results.append(
                 ChunkAnalysisResult(
+                    chunk_id=chunk_id,
                     chunk_index=i,
                     total_chunks=total,
                     chunk_text=chunk_text,
                     analysis=None,
                     error=str(exc),
+                    status="error",
                 )
             )
 
     successful = sum(1 for c in chunk_results if c.succeeded)
     failed = sum(1 for c in chunk_results if not c.succeeded)
+    checker_summary = _build_checker_summary(chunk_results, total)
 
     return MultiChunkAnalysisResult(
         original_spanish=source_text,
@@ -132,4 +142,28 @@ def analyze_spanish_source_chunks(
         total_chunks=total,
         successful_chunks=successful,
         failed_chunks=failed,
+        checker_summary=checker_summary,
     )
+
+
+def _build_checker_summary(
+    chunk_results: list[ChunkAnalysisResult],
+    total: int,
+) -> str:
+    """Return a one-line summary of checker outcomes across all chunks."""
+    successful = sum(1 for c in chunk_results if c.succeeded)
+    errors = sum(1 for c in chunk_results if c.status == "error")
+    warnings = sum(1 for c in chunk_results if c.status == "warning")
+    failures = sum(1 for c in chunk_results if c.status == "failed")
+
+    if errors == 0 and failures == 0 and warnings == 0:
+        return f"{successful}/{total} passed"
+
+    parts = [f"{successful}/{total} passed"]
+    if warnings:
+        parts.append(f"{warnings} warning{'s' if warnings != 1 else ''}")
+    if failures:
+        parts.append(f"{failures} failed")
+    if errors:
+        parts.append(f"{errors} error{'s' if errors != 1 else ''}")
+    return ", ".join(parts)

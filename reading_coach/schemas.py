@@ -147,10 +147,41 @@ class ChunkAnalysisResult(BaseModel):
     error: Optional[str] = None
     """Exception message when analysis failed; ``None`` on success."""
 
+    # --- Added in slice 4 ---
+
+    chunk_id: str = ""
+    """Stable identifier in the form ``chunk_NNNN``; empty string when not set by the
+    orchestrator (e.g. objects constructed directly in tests)."""
+
+    checker_result: Optional[Any] = None
+    """The :class:`~reading_coach.checker.CoachCheckResult` for this chunk, or
+    ``None`` when the chunk failed.  Typed ``Optional[Any]`` to avoid a circular
+    import (checker.py imports ReadingCoachResult from this module)."""
+
+    status: str = ""
+    """Checker status for successful chunks (``'passed'``, ``'warning'``,
+    ``'failed'``), or ``'error'`` when the LLM/parse step raised.  Empty string
+    when set by legacy code that does not populate it."""
+
     @property
     def succeeded(self) -> bool:
         """``True`` when :attr:`analysis` is populated (chunk analysed successfully)."""
         return self.analysis is not None
+
+    @property
+    def index(self) -> int:
+        """Alias for :attr:`chunk_index` (added in slice 4)."""
+        return self.chunk_index
+
+    @property
+    def source_text(self) -> str:
+        """Alias for :attr:`chunk_text` (added in slice 4)."""
+        return self.chunk_text
+
+    @property
+    def error_message(self) -> Optional[str]:
+        """Alias for :attr:`error` (added in slice 4)."""
+        return self.error
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +216,13 @@ class MultiChunkAnalysisResult(BaseModel):
     failed_chunks: int
     """Number of chunks that could not be analysed (LLM or parse error)."""
 
+    # --- Added in slice 4 ---
+
+    checker_summary: Optional[str] = None
+    """Human-readable summary of checker outcomes across all chunks, e.g.
+    ``'1/1 passed'``.  Populated by the orchestrator; ``None`` for objects
+    constructed without it."""
+
     @property
     def all_difficult_phrases(self) -> List[DifficultPhrase]:
         """Combined list of difficult phrases from all successful chunks, in order."""
@@ -193,3 +231,8 @@ class MultiChunkAnalysisResult(BaseModel):
             if chunk.analysis is not None:
                 phrases.extend(chunk.analysis.result.difficult_phrases)
         return phrases
+
+    @property
+    def combined_difficult_phrases(self) -> List[DifficultPhrase]:
+        """Alias for :attr:`all_difficult_phrases` (added in slice 4)."""
+        return self.all_difficult_phrases
