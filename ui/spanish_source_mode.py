@@ -21,6 +21,7 @@ from reading_coach.checker import CoachCheckerConfig
 from reading_coach.config import get_coach_settings
 from reading_coach.errors import ReadingCoachTimeoutError
 from reading_coach.llm_adapter import make_ollama_coach_client
+from reading_coach.saved_phrases import saved_phrase_from_difficult_phrase
 from reading_coach.schemas import VALID_COACH_LEVELS, MultiChunkAnalysisResult
 from reading_coach.session import CoachSession
 from reading_coach.session_repository import InMemoryCoachSessionRepository
@@ -184,6 +185,107 @@ def _render_session_history(repo: InMemoryCoachSessionRepository) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Saved-phrase helpers
+# ---------------------------------------------------------------------------
+
+
+def _saved_phrases_to_markdown(phrases) -> str:
+    """Render a list of :class:`~reading_coach.session.SavedPhrase` as Markdown.
+
+    Produces a ``## Saved Phrases`` heading followed by one ``###`` subsection
+    per phrase, showing all populated optional fields.
+    """
+    lines = ["## Saved Phrases", ""]
+    for sp in phrases:
+        lines.append(f"### {sp.phrase}")
+        lines.append(f"**Category:** {sp.category}  ")
+        lines.append(f"**Level:** {sp.difficulty_level}  ")
+        if sp.english_meaning:
+            lines.append(f"**English:** {sp.english_meaning}  ")
+        if sp.modern_spanish_equivalent:
+            lines.append(f"**Modern Spanish:** {sp.modern_spanish_equivalent}  ")
+        if sp.grammar_note:
+            lines.append(f"**Grammar:** {sp.grammar_note}  ")
+        if sp.learner_tip:
+            lines.append(f"**Tip:** {sp.learner_tip}  ")
+        lines.append(f"**Source:** *{sp.source_context}*  ")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _render_saved_phrases_panel(repo: InMemoryCoachSessionRepository) -> None:
+    """Render the Saved Phrases section below the result area.
+
+    When no phrases have been saved a short empty-state hint is shown.
+    When phrases are present each is shown in a collapsible expander with all
+    populated fields and a Delete button.  An export download button appears
+    at the top of the list.
+    """
+    phrases = repo.list_saved_phrases()
+    st.subheader("Saved phrases")
+    if not phrases:
+        st.caption("No saved phrases yet. Click \"Save phrase\" below any difficult phrase.")
+        return
+
+    # Export button (top of list)
+    _md = _saved_phrases_to_markdown(phrases)
+    st.download_button(
+        label="\U0001f4e5 Export saved phrases (Markdown)",
+        data=_md,
+        file_name="saved-phrases.md",
+        mime="text/markdown",
+        key="coach_export_phrases_btn",
+    )
+
+    for sp in phrases:
+        with st.expander(sp.phrase, expanded=False):
+            st.caption(f"{sp.category} \u00b7 {sp.difficulty_level}")
+            if sp.english_meaning:
+                st.write(f"**English:** {sp.english_meaning}")
+            if sp.modern_spanish_equivalent:
+                st.write(f"**Modern Spanish:** {sp.modern_spanish_equivalent}")
+            if sp.grammar_note:
+                st.write(f"**Grammar:** {sp.grammar_note}")
+            if sp.learner_tip:
+                st.write(f"**Tip:** {sp.learner_tip}")
+            st.write(f"**Source:** *{sp.source_context}*")
+            if st.button(
+                "\U0001f5d1 Delete phrase",
+                key=f"coach_delete_phrase_{sp.phrase_id}",
+            ):
+                repo.delete_phrase(sp.phrase_id)
+                st.rerun()
+
+
+def _render_phrase_save_buttons(
+    result,
+    *,
+    source_context: str,
+    session_id: str | None,
+    repo: InMemoryCoachSessionRepository,
+) -> None:
+    """Render a \"Save phrase\" button for each difficult phrase in *result*.
+
+    Buttons are rendered immediately below the phrase expanders so users can
+    save individual phrases without leaving the analysis view.  Each button
+    uses a zero-based index key ``coach_save_phrase_{i}`` so the key is stable
+    within a single render cycle even when phrase text contains special chars.
+    """
+    for i, dp in enumerate(result.difficult_phrases):
+        if st.button(
+            f"\U0001f4cc Save phrase: \u2018{dp.phrase}\u2019",
+            key=f"coach_save_phrase_{i}",
+        ):
+            sp = saved_phrase_from_difficult_phrase(
+                dp,
+                source_context=source_context,
+                session_id=session_id,
+            )
+            repo.save_phrase(sp)
+            st.success(f"Phrase \u2018{dp.phrase}\u2019 saved!")
+
+
+# ---------------------------------------------------------------------------
 # Ollama client factory (unit-testable)
 # ---------------------------------------------------------------------------
 
@@ -214,7 +316,14 @@ def make_ollama_client(host: str, model: str, timeout: float):
 # Result display (pure Streamlit — no unit tests)
 # ---------------------------------------------------------------------------
 
-def _display_coach_result(analysis: AnalysisResult, title: str = "") -> None:
+def _display_coach_result(
+    analysis: AnalysisResult,
+    title: str = "",
+    *,
+    repo: InMemoryCoachSessionRepository | None = None,
+    source_text: str = "",
+    session_id: str | None = None,
+) -> None:
     """Render a ReadingCoachResult and its check badge in the main content area."""
     result = analysis.result
     check = analysis.check
@@ -264,6 +373,14 @@ def _display_coach_result(analysis: AnalysisResult, title: str = "") -> None:
                     st.write(f"**Grammar:** {dp.grammar_note}")
                 if dp.learner_tip:
                     st.write(f"**Tip:** {dp.learner_tip}")
+
+        if repo is not None:
+            _render_phrase_save_buttons(
+                result,
+                source_context=source_text or result.original_spanish,
+                session_id=session_id,
+                repo=repo,
+            )
 
     # Grammar notes
     if result.grammar_notes:
@@ -433,8 +550,15 @@ def render_coach_mode(
 
     # --- Display last result (persists across reruns) ----------------------
     analysis: AnalysisResult | None = st.session_state.get("coach_analysis")
+    _saved_session_id: str | None = st.session_state.get("coach_saved_session_id")
     if analysis is not None:
-        _display_coach_result(analysis, title=title)
+        _display_coach_result(
+            analysis,
+            title=title,
+            repo=repo,
+            source_text=source_text,
+            session_id=_saved_session_id,
+        )
         _render_save_button(
             analysis,
             source_text=source_text,
@@ -443,6 +567,8 @@ def render_coach_mode(
             title=title,
             repo=repo,
         )
+
+    _render_saved_phrases_panel(repo)
 
     multi: MultiChunkAnalysisResult | None = st.session_state.get("coach_multi_analysis")
     if multi is not None:
