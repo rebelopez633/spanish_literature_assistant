@@ -22,6 +22,8 @@ from reading_coach.config import get_coach_settings
 from reading_coach.errors import ReadingCoachTimeoutError
 from reading_coach.llm_adapter import make_ollama_coach_client
 from reading_coach.schemas import VALID_COACH_LEVELS, MultiChunkAnalysisResult
+from reading_coach.session import CoachSession
+from reading_coach.session_repository import InMemoryCoachSessionRepository
 from reading_coach.study_notes import (
     multi_chunk_result_to_markdown,
     reading_coach_result_to_markdown,
@@ -60,6 +62,125 @@ def _safe_filename(title: str | None) -> str:
     slug = re.sub(r"-+", "-", slug)          # collapse runs
     slug = slug.strip("-")[:60].rstrip("-")  # trim and truncate
     return f"{slug or 'spanish-reading-notes'}.md"
+
+
+# ---------------------------------------------------------------------------
+# Session history helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_or_create_repo() -> InMemoryCoachSessionRepository:
+    """Return the shared in-memory repository from session_state, creating it when absent.
+
+    The repository is keyed as ``st.session_state.coach_repo`` and persists for
+    the lifetime of the Streamlit app process.  It is intentionally *not* reset
+    between reruns.
+    """
+    if "coach_repo" not in st.session_state:
+        st.session_state.coach_repo = InMemoryCoachSessionRepository()
+    return st.session_state.coach_repo
+
+
+def _build_coach_session(
+    analysis: AnalysisResult,
+    *,
+    source_text: str,
+    reader_level: str,
+    annotation_density: str,
+    title: str,
+) -> CoachSession:
+    """Build a :class:`CoachSession` from a completed analysis.
+
+    The full :class:`AnalysisResult` is stored in :attr:`CoachSession.result`
+    so that reloading restores both the parsed result and the check outcome.
+    """
+    return CoachSession(
+        original_spanish=source_text,
+        reader_level=reader_level,
+        annotation_density=annotation_density,
+        prompt_version=analysis.prompt_version,
+        result=analysis,
+        title=title or None,
+    )
+
+
+def _render_save_button(
+    analysis: AnalysisResult,
+    *,
+    source_text: str,
+    reader_level: str,
+    annotation_density: str,
+    title: str,
+    repo: InMemoryCoachSessionRepository,
+) -> None:
+    """Render a \"Save session\" button below the analysis result.
+
+    On click: builds a :class:`CoachSession`, persists it to *repo*, and stores
+    the saved ``session_id`` in ``st.session_state.coach_saved_session_id``.
+    """
+    if st.button("\U0001f4be Save session", key="coach_save_session_btn"):
+        session = _build_coach_session(
+            analysis,
+            source_text=source_text,
+            reader_level=reader_level,
+            annotation_density=annotation_density,
+            title=title,
+        )
+        saved = repo.save_session(session)
+        st.session_state.coach_saved_session_id = saved.session_id
+        st.success("Session saved!")
+
+
+def _apply_session_reload(session: CoachSession) -> None:
+    """Restore a saved :class:`CoachSession` into Streamlit session state.
+
+    Sets ``coach_analysis`` and all relevant widget-keyed entries so that the
+    next rerun re-populates the UI with the session's data.
+    """
+    if session.result is not None:
+        st.session_state.coach_analysis = session.result
+    st.session_state.coach_source_text = session.original_spanish
+    st.session_state.coach_reader_level = session.reader_level
+    st.session_state.coach_annotation_density = session.annotation_density
+    if session.title:
+        st.session_state.coach_session_title = session.title
+    st.rerun()
+
+
+def _render_session_history(repo: InMemoryCoachSessionRepository) -> None:
+    """Render the session history panel in the sidebar.
+
+    Shows a collapsible entry per session (newest first) with Reload and
+    Delete buttons.  When the repo is empty a \"No saved sessions yet.\" hint
+    is displayed instead.
+    """
+    sessions = repo.list_sessions()
+    with st.sidebar:
+        st.subheader("Session history")
+        if not sessions:
+            st.caption("No saved sessions yet.")
+            return
+        for session in sessions:
+            label = (session.title or session.original_spanish[:50]).strip()
+            with st.expander(label, expanded=False):
+                st.caption(
+                    f"{session.reader_level} \u00b7 {session.annotation_density} \u00b7 "
+                    f"{session.created_at.strftime('%Y-%m-%d %H:%M')}"
+                )
+                col_r, col_d = st.columns(2)
+                with col_r:
+                    if st.button(
+                        "\u21a9 Reload",
+                        key=f"coach_reload_{session.session_id}",
+                    ):
+                        _apply_session_reload(session)
+                with col_d:
+                    if st.button(
+                        "\U0001f5d1 Delete",
+                        key=f"coach_delete_{session.session_id}",
+                    ):
+                        repo.delete_session(session.session_id)
+                        st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +341,9 @@ def render_coach_mode(
     so they can be controlled via environment variables without touching this
     function's call site.
     """
+    repo = _get_or_create_repo()
+    _render_session_history(repo)
+
     st.subheader("Spanish Source Reading Coach")
     st.caption("Paste a Spanish passage and let the coach annotate it for your level.")
 
@@ -311,6 +435,14 @@ def render_coach_mode(
     analysis: AnalysisResult | None = st.session_state.get("coach_analysis")
     if analysis is not None:
         _display_coach_result(analysis, title=title)
+        _render_save_button(
+            analysis,
+            source_text=source_text,
+            reader_level=reader_level,
+            annotation_density=annotation_density,
+            title=title,
+            repo=repo,
+        )
 
     multi: MultiChunkAnalysisResult | None = st.session_state.get("coach_multi_analysis")
     if multi is not None:
