@@ -342,6 +342,23 @@ def _display_coach_result(
             for issue in check.issues:
                 st.write(f"- {issue}")
 
+    # Diagnostics expander (only when metadata available)
+    if analysis.metadata is not None:
+        meta = analysis.metadata
+        with st.expander("Diagnostics", expanded=False):
+            st.write(f"**Prompt version:** `{meta.prompt_version}`")
+            st.write(f"**Reader level:** {meta.reader_level}")
+            st.write(f"**Annotation density:** {meta.annotation_density}")
+            st.write(f"**Checker status:** {meta.checker_status}")
+            st.write(f"**Annotation limit policy:** {meta.annotation_limit_policy}")
+            st.write(f"**Max annotations:** {meta.max_annotations}")
+            if meta.model_name:
+                st.write(f"**Model:** {meta.model_name}")
+            if meta.parser_strategy:
+                st.write(f"**Parser strategy:** {meta.parser_strategy}")
+            if meta.retry_attempts is not None:
+                st.write(f"**Retry attempts:** {meta.retry_attempts}")
+
     # Top-level stats
     col_a, col_b = st.columns(2)
     with col_a:
@@ -400,7 +417,11 @@ def _display_coach_result(
                 st.write(result.comprehension_question.answer_hint)
 
     # --- Markdown download ---
-    _content = reading_coach_result_to_markdown(result, title=title or None)
+    _content = reading_coach_result_to_markdown(
+        result,
+        title=title or None,
+        metadata=analysis.metadata,
+    )
     st.download_button(
         label="📥 Download study notes (Markdown)",
         data=_content,
@@ -428,6 +449,20 @@ def _display_multi_chunk_coach_result(
     phrase_count = len(multi.all_difficult_phrases)
     if phrase_count:
         st.metric("Difficult phrases (total)", phrase_count)
+
+    # Diagnostics expander (only when metadata available)
+    if multi.metadata is not None:
+        meta = multi.metadata
+        with st.expander("Diagnostics", expanded=False):
+            st.write(f"**Prompt version:** `{meta.prompt_version}`")
+            st.write(f"**Reader level:** {meta.reader_level}")
+            st.write(f"**Annotation density:** {meta.annotation_density}")
+            st.write(f"**Chunks:** {meta.chunk_count} total, {meta.successful_chunk_count} successful, {meta.failed_chunk_count} failed")
+            st.write(f"**Checker status:** {meta.checker_status}")
+            st.write(f"**Annotation limit policy:** {meta.annotation_limit_policy}")
+            st.write(f"**Max annotations:** {meta.max_annotations}")
+            if meta.model_name:
+                st.write(f"**Model:** {meta.model_name}")
 
     # --- Markdown download ---
     _content = multi_chunk_result_to_markdown(multi, title=title or None)

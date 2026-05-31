@@ -19,6 +19,7 @@ from typing import Callable, Optional
 
 from reading_coach.checker import CoachCheckResult, CoachCheckerConfig, check_coach_result
 from reading_coach.errors import ReadingCoachError
+from reading_coach.metadata import AnalysisMetadata, build_metadata_from_single
 from reading_coach.prompts import SPANISH_SOURCE_PROMPT_VERSION, build_coach_prompt
 from reading_coach.response_parser import ReadingCoachParseError, parse_reading_coach_response
 from reading_coach.retry import RetryConfig, get_retry_config, with_retry
@@ -56,6 +57,7 @@ class AnalysisResult:
     """Version of the prompt that produced this result.  Populated automatically
     from :data:`reading_coach.prompts.SPANISH_SOURCE_PROMPT_VERSION` so results
     are traceable when the prompt evolves."""
+    metadata: Optional[AnalysisMetadata] = None  # populated by analyze_spanish_source()
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +78,7 @@ def analyze_spanish_source(
     llm_client: Callable[[list[dict[str, str]]], str],
     checker_config: Optional[CoachCheckerConfig] = None,
     retry_config: RetryConfig | None = None,
+    model_name: Optional[str] = None,
 ) -> AnalysisResult:
     """Orchestrate one full reading-coach analysis pass.
 
@@ -140,4 +143,18 @@ def analyze_spanish_source(
 
     check = check_coach_result(source_text, coach_result, config=checker_config)
 
-    return AnalysisResult(result=coach_result, check=check, raw_response=raw)
+    metadata = build_metadata_from_single(
+        prompt_version=SPANISH_SOURCE_PROMPT_VERSION,
+        reader_level=reader_level,
+        annotation_density=annotation_density,
+        checker_status=check.status,
+        checker_config=checker_config,
+        model_name=model_name,
+    )
+
+    return AnalysisResult(
+        result=coach_result,
+        check=check,
+        raw_response=raw,
+        metadata=metadata,
+    )

@@ -226,6 +226,11 @@ class MultiChunkAnalysisResult(BaseModel):
     ``'1/1 passed'``.  Populated by the orchestrator; ``None`` for objects
     constructed without it."""
 
+    metadata: Optional[Any] = None
+    """Lightweight :class:`~reading_coach.metadata.AnalysisMetadata` for this
+    analysis pass.  Typed ``Optional[Any]`` to avoid a circular import.
+    Populated by the orchestrator; ``None`` for objects constructed without it."""
+
     @property
     def all_difficult_phrases(self) -> List[DifficultPhrase]:
         """Combined list of difficult phrases from all successful chunks, in order."""

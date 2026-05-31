@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from reading_coach.metadata import AnalysisMetadata
 from reading_coach.schemas import (
     ChunkAnalysisResult,
     ComprehensionQuestion,
@@ -74,6 +75,38 @@ def _comprehension_block(q: ComprehensionQuestion) -> str:
     return "\n".join(lines)
 
 
+def _metadata_summary_line(meta: AnalysisMetadata) -> str:
+    """Return a brief one-liner suitable for a Markdown blockquote footer."""
+    parts = [f"Prompt: `{meta.prompt_version}`", f"Level: {meta.reader_level}"]
+    parts.append(f"Density: {meta.annotation_density}")
+    if meta.model_name:
+        parts.append(f"Model: {meta.model_name}")
+    return "> *" + " · ".join(parts) + "*"
+
+
+def _metadata_full_section(meta: AnalysisMetadata) -> str:
+    """Return a full ``## Diagnostics`` Markdown section."""
+    lines = [
+        "## Diagnostics\n",
+        f"- **Prompt version:** `{meta.prompt_version}`",
+        f"- **Reader level:** {meta.reader_level}",
+        f"- **Annotation density:** {meta.annotation_density}",
+        f"- **Chunk count:** {meta.chunk_count}",
+        f"- **Successful chunks:** {meta.successful_chunk_count}",
+        f"- **Failed chunks:** {meta.failed_chunk_count}",
+        f"- **Checker status:** {meta.checker_status}",
+        f"- **Annotation limit policy:** {meta.annotation_limit_policy}",
+        f"- **Max annotations:** {meta.max_annotations}",
+    ]
+    if meta.model_name is not None:
+        lines.append(f"- **Model:** {meta.model_name}")
+    if meta.parser_strategy is not None:
+        lines.append(f"- **Parser strategy:** {meta.parser_strategy}")
+    if meta.retry_attempts is not None:
+        lines.append(f"- **Retry attempts:** {meta.retry_attempts}")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -81,6 +114,9 @@ def _comprehension_block(q: ComprehensionQuestion) -> str:
 def reading_coach_result_to_markdown(
     result: ReadingCoachResult,
     title: Optional[str] = None,
+    *,
+    metadata: Optional[AnalysisMetadata] = None,
+    include_metadata: bool = False,
 ) -> str:
     """Convert a ReadingCoachResult into a Markdown study-notes document.
 
@@ -141,6 +177,13 @@ def reading_coach_result_to_markdown(
             level=2,
             body=_comprehension_block(result.comprehension_question),
         ))
+
+    # --- Diagnostics footer ---
+    if metadata is not None:
+        if include_metadata:
+            parts.append(_metadata_full_section(metadata))
+        else:
+            parts.append(_metadata_summary_line(metadata))
 
     return "\n".join(parts)
 

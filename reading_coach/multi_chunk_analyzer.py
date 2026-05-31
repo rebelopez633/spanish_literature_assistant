@@ -34,6 +34,7 @@ from typing import Callable, Optional
 from reading_coach.analyzer import analyze_spanish_source
 from reading_coach.checker import CoachCheckerConfig
 from reading_coach.chunker import split_into_chunks
+from reading_coach.metadata import build_metadata_from_multi
 from reading_coach.prompts import SPANISH_SOURCE_PROMPT_VERSION
 from reading_coach.retry import RetryConfig
 from reading_coach.schemas import ChunkAnalysisResult, MultiChunkAnalysisResult
@@ -53,6 +54,7 @@ def analyze_spanish_source_chunks(
     checker_config: Optional[CoachCheckerConfig] = None,
     retry_config: RetryConfig | None = None,
     continue_on_error: bool = True,
+    model_name: Optional[str] = None,
 ) -> MultiChunkAnalysisResult:
     """Analyse a (potentially long) Spanish passage by splitting into chunks.
 
@@ -97,6 +99,7 @@ def analyze_spanish_source_chunks(
                 llm_client=llm_client,
                 checker_config=checker_config,
                 retry_config=retry_config,
+                model_name=model_name,
             )
             chunk_results.append(
                 ChunkAnalysisResult(
@@ -135,6 +138,18 @@ def analyze_spanish_source_chunks(
     failed = sum(1 for c in chunk_results if not c.succeeded)
     checker_summary = _build_checker_summary(chunk_results, total)
 
+    metadata = build_metadata_from_multi(
+        prompt_version=SPANISH_SOURCE_PROMPT_VERSION,
+        reader_level=reader_level,
+        annotation_density=annotation_density,
+        total_chunks=total,
+        successful_chunks=successful,
+        failed_chunks=failed,
+        checker_summary=checker_summary,
+        checker_config=checker_config,
+        model_name=model_name,
+    )
+
     return MultiChunkAnalysisResult(
         original_spanish=source_text,
         chunks=chunk_results,
@@ -143,6 +158,7 @@ def analyze_spanish_source_chunks(
         successful_chunks=successful,
         failed_chunks=failed,
         checker_summary=checker_summary,
+        metadata=metadata,
     )
 
 
