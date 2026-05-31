@@ -321,6 +321,17 @@ class TestErrorHandling:
         result = analyze_spanish_source(SOURCE, llm_client=incomplete_client)
         assert result.result.overall_level == "B1"
 
+    def test_missing_overall_level_uses_reader_level_as_fallback(self):
+        """When overall_level is absent, the fallback is the reader's selected level."""
+        import json as _json
+        payload = _json.dumps({"original_spanish": SOURCE})
+
+        def no_level_client(messages):  # noqa: ARG001
+            return payload
+
+        ar = analyze_spanish_source(SOURCE, reader_level="C1", llm_client=no_level_client)
+        assert ar.result.overall_level == "C1"
+
     def test_json_array_raises(self):
         """A JSON array (not an object) must raise, not silently succeed."""
         def array_client(messages):  # noqa: ARG001

@@ -122,7 +122,7 @@ def analyze_spanish_source(
 
     def _attempt() -> tuple[str, ReadingCoachResult]:
         _raw = llm_client(messages)
-        _result = parse_reading_coach_response(_raw)
+        _result = parse_reading_coach_response(_raw, fallback_level=reader_level)
         return _raw, _result
 
     try:

@@ -21,7 +21,7 @@ import re
 from pydantic import ValidationError
 
 from reading_coach.errors import ReadingCoachParseError, ReadingCoachValidationError
-from reading_coach.schemas import ReadingCoachResult
+from reading_coach.schemas import DEFAULT_COACH_LEVEL, ReadingCoachResult
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,18 @@ def _strip_fences(text: str) -> str:
     return stripped
 
 
-def _validate_dict(obj: dict) -> ReadingCoachResult:
-    """Validate a parsed dict against ReadingCoachResult; wrap ValidationError."""
+def _validate_dict(obj: dict, fallback_level: str = DEFAULT_COACH_LEVEL) -> ReadingCoachResult:
+    """Validate a parsed dict against ReadingCoachResult; wrap ValidationError.
+
+    When *obj* has no ``overall_level`` key, *fallback_level* is injected so
+    the result reflects the caller's context (e.g. the reader's selected level)
+    rather than the schema's hardcoded constant.
+    """
+    if "overall_level" not in obj:
+        logger.warning(
+            "LLM response missing 'overall_level'; defaulting to %r.", fallback_level
+        )
+        obj = {**obj, "overall_level": fallback_level}
     try:
         return ReadingCoachResult.model_validate(obj)
     except ValidationError as exc:
@@ -61,13 +71,21 @@ def _validate_dict(obj: dict) -> ReadingCoachResult:
 # Public API
 # ---------------------------------------------------------------------------
 
-def parse_reading_coach_response(raw_text: str) -> ReadingCoachResult:
+def parse_reading_coach_response(
+    raw_text: str,
+    *,
+    fallback_level: str = DEFAULT_COACH_LEVEL,
+) -> ReadingCoachResult:
     """Parse *raw_text* into a :class:`ReadingCoachResult`.
 
     Parameters
     ----------
     raw_text:
         Verbatim string returned by the LLM (may contain fences, prose, etc.).
+    fallback_level:
+        CEFR level to use when the LLM omits ``overall_level`` entirely.
+        Pass the reader's selected level so the fallback is meaningful rather
+        than always defaulting to ``"B1"``.
 
     Returns
     -------
@@ -94,7 +112,7 @@ def parse_reading_coach_response(raw_text: str) -> ReadingCoachResult:
             obj = None
 
         if isinstance(obj, dict):
-            return _validate_dict(obj)
+            return _validate_dict(obj, fallback_level)
         # obj is None (parse error) or a non-dict JSON value → fall through.
 
     # Strategy B: locate the first '{' and use json.JSONDecoder.raw_decode()
@@ -107,7 +125,7 @@ def parse_reading_coach_response(raw_text: str) -> ReadingCoachResult:
             obj = None
 
         if isinstance(obj, dict):
-            return _validate_dict(obj)
+            return _validate_dict(obj, fallback_level)
 
     raise ReadingCoachParseError(
         f"Failed to parse LLM response as ReadingCoachResult: "
