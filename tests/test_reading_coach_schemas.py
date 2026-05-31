@@ -263,9 +263,10 @@ class TestReadingCoachResultConstruction:
         with pytest.raises(ValidationError):
             ReadingCoachResult(overall_level="B1")
 
-    def test_missing_overall_level_raises(self):
-        with pytest.raises(ValidationError):
-            ReadingCoachResult(original_spanish="Hola mundo.")
+    def test_missing_overall_level_defaults_to_b1(self):
+        """overall_level is optional; omitting it falls back to DEFAULT_COACH_LEVEL."""
+        r = ReadingCoachResult(original_spanish="Hola mundo.")
+        assert r.overall_level == "B1"
 
 
 class TestReadingCoachResultOriginalSpanish:

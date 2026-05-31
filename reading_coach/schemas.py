@@ -103,7 +103,10 @@ class ReadingCoachResult(BaseModel):
     original_spanish: str
     modern_spanish: Optional[str] = None
     english_gloss: Optional[str] = None
-    overall_level: str
+    overall_level: str = DEFAULT_COACH_LEVEL
+    """CEFR level for the passage.  Defaults to :data:`DEFAULT_COACH_LEVEL` ("B1")
+    when the LLM omits the field, consistent with the coerce-not-raise policy
+    applied to unrecognised values."""
     difficult_phrases: List[DifficultPhrase] = Field(default_factory=list)
     grammar_notes: List[GrammarNote] = Field(default_factory=list)
     comprehension_question: Optional[ComprehensionQuestion] = None

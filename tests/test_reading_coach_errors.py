@@ -222,12 +222,14 @@ class TestResponseParserRaisesValidationError:
         with pytest.raises(ReadingCoachValidationError):
             parse_reading_coach_response(json.dumps(payload))
 
-    def test_missing_overall_level_raises_validation_error(self):
+    def test_missing_overall_level_defaults_to_b1(self):
+        """overall_level is optional — omitting it falls back to 'B1' (coerce policy)."""
         from reading_coach.response_parser import parse_reading_coach_response
         payload = dict(_VALID_PAYLOAD)
         del payload["overall_level"]
-        with pytest.raises(ReadingCoachValidationError):
-            parse_reading_coach_response(json.dumps(payload))
+        result = parse_reading_coach_response(json.dumps(payload))
+        from reading_coach.schemas import DEFAULT_COACH_LEVEL
+        assert result.overall_level == DEFAULT_COACH_LEVEL
 
     def test_validation_error_is_parse_error(self):
         """Schema failures are still catchable as ReadingCoachParseError (backward compat)."""

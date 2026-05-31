@@ -214,11 +214,11 @@ class TestSchemaValidation:
         with pytest.raises(ReadingCoachParseError):
             parse_reading_coach_response(json.dumps(payload))
 
-    def test_missing_overall_level_raises(self):
+    def test_missing_overall_level_defaults_to_b1(self):
         payload = dict(_VALID_PAYLOAD)
         del payload["overall_level"]
-        with pytest.raises(ReadingCoachParseError):
-            parse_reading_coach_response(json.dumps(payload))
+        result = parse_reading_coach_response(json.dumps(payload))
+        assert result.overall_level == DEFAULT_COACH_LEVEL
 
     def test_wrong_type_for_original_spanish_raises(self):
         payload = dict(_VALID_PAYLOAD)

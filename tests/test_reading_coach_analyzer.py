@@ -311,15 +311,15 @@ class TestErrorHandling:
         with pytest.raises(CoachAnalysisError):
             analyze_spanish_source(SOURCE, llm_client=incomplete_client)
 
-    def test_missing_overall_level_raises(self):
-        """JSON that omits the required 'overall_level' field must raise."""
+    def test_missing_overall_level_defaults_to_b1(self):
+        """JSON that omits 'overall_level' succeeds and defaults to 'B1'."""
         incomplete = json.dumps({"original_spanish": SOURCE})
 
         def incomplete_client(messages):  # noqa: ARG001
             return incomplete
 
-        with pytest.raises(CoachAnalysisError):
-            analyze_spanish_source(SOURCE, llm_client=incomplete_client)
+        result = analyze_spanish_source(SOURCE, llm_client=incomplete_client)
+        assert result.result.overall_level == "B1"
 
     def test_json_array_raises(self):
         """A JSON array (not an object) must raise, not silently succeed."""
