@@ -12,6 +12,8 @@ integration tests only.
 """
 from __future__ import annotations
 
+import re
+
 import streamlit as st
 
 from reading_coach.analyzer import AnalysisResult, CoachAnalysisError, analyze_spanish_source
@@ -19,7 +21,11 @@ from reading_coach.checker import CoachCheckerConfig
 from reading_coach.config import get_coach_settings
 from reading_coach.errors import ReadingCoachTimeoutError
 from reading_coach.llm_adapter import make_ollama_coach_client
-from reading_coach.schemas import VALID_COACH_LEVELS
+from reading_coach.schemas import VALID_COACH_LEVELS, MultiChunkAnalysisResult
+from reading_coach.study_notes import (
+    multi_chunk_result_to_markdown,
+    reading_coach_result_to_markdown,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -32,6 +38,28 @@ _DENSITY_HELP: dict[str, str] = {
     "balanced": "Moderate annotation for typical study use — 5-10 annotations.",
     "detailed": "Comprehensive coverage for close reading — 10+ annotations.",
 }
+
+
+# ---------------------------------------------------------------------------
+# Filename helper
+# ---------------------------------------------------------------------------
+
+
+def _safe_filename(title: str | None) -> str:
+    """Return a safe ``.md`` filename for study notes.
+
+    Falls back to ``'spanish-reading-notes.md'`` when *title* is empty or
+    ``None``.  Otherwise: lower-case, non-alphanumeric chars → hyphens,
+    consecutive hyphens collapsed, edges stripped, stem truncated at 60 chars.
+    """
+    if not title or not title.strip():
+        return "spanish-reading-notes.md"
+    slug = title.strip().lower()
+    slug = re.sub(r"[^\w\s-]", "", slug)   # drop punctuation
+    slug = re.sub(r"[\s_]+", "-", slug)     # spaces/underscores → hyphens
+    slug = re.sub(r"-+", "-", slug)          # collapse runs
+    slug = slug.strip("-")[:60].rstrip("-")  # trim and truncate
+    return f"{slug or 'spanish-reading-notes'}.md"
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +93,7 @@ def make_ollama_client(host: str, model: str, timeout: float):
 # Result display (pure Streamlit — no unit tests)
 # ---------------------------------------------------------------------------
 
-def _display_coach_result(analysis: AnalysisResult) -> None:
+def _display_coach_result(analysis: AnalysisResult, title: str = "") -> None:
     """Render a ReadingCoachResult and its check badge in the main content area."""
     result = analysis.result
     check = analysis.check
@@ -133,6 +161,45 @@ def _display_coach_result(analysis: AnalysisResult) -> None:
             with st.expander("Answer hint", expanded=False):
                 st.write(result.comprehension_question.answer_hint)
 
+    # --- Markdown download ---
+    _content = reading_coach_result_to_markdown(result, title=title or None)
+    st.download_button(
+        label="📥 Download study notes (Markdown)",
+        data=_content,
+        file_name=_safe_filename(title),
+        mime="text/markdown",
+    )
+
+
+def _display_multi_chunk_coach_result(
+    multi: MultiChunkAnalysisResult, title: str = ""
+) -> None:
+    """Render a summary and download button for a multi-chunk analysis result."""
+    st.divider()
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Total chunks", multi.total_chunks)
+    with col_b:
+        st.metric("Successful", multi.successful_chunks)
+    with col_c:
+        st.metric("Failed", multi.failed_chunks)
+
+    if multi.checker_summary:
+        st.caption(f"Checker: {multi.checker_summary}")
+
+    phrase_count = len(multi.all_difficult_phrases)
+    if phrase_count:
+        st.metric("Difficult phrases (total)", phrase_count)
+
+    # --- Markdown download ---
+    _content = multi_chunk_result_to_markdown(multi, title=title or None)
+    st.download_button(
+        label="📥 Download study notes (Markdown)",
+        data=_content,
+        file_name=_safe_filename(title),
+        mime="text/markdown",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Main render function (called from app.py)
@@ -192,6 +259,14 @@ def render_coach_mode(
             key="coach_include_english_gloss",
         )
 
+    _raw_title = st.text_input(
+        "Session title",
+        value="",
+        placeholder="Optional — used in the Markdown heading and filename",
+        key="coach_session_title",
+    )
+    title: str = _raw_title if isinstance(_raw_title, str) else ""
+
     analyse_clicked: bool = st.button(
         "Analyze",
         type="primary",
@@ -235,4 +310,8 @@ def render_coach_mode(
     # --- Display last result (persists across reruns) ----------------------
     analysis: AnalysisResult | None = st.session_state.get("coach_analysis")
     if analysis is not None:
-        _display_coach_result(analysis)
+        _display_coach_result(analysis, title=title)
+
+    multi: MultiChunkAnalysisResult | None = st.session_state.get("coach_multi_analysis")
+    if multi is not None:
+        _display_multi_chunk_coach_result(multi, title=title)
